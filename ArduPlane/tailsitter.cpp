@@ -225,6 +225,7 @@ void Tailsitter::setup()
     _have_rudder = SRV_Channels::function_assigned(SRV_Channel::k_rudder);
     _have_elevon = SRV_Channels::function_assigned(SRV_Channel::k_elevon_left) || SRV_Channels::function_assigned(SRV_Channel::k_elevon_right);
     _have_v_tail = SRV_Channels::function_assigned(SRV_Channel::k_vtail_left) || SRV_Channels::function_assigned(SRV_Channel::k_vtail_right);
+    _have_rudderon = SRV_Channels::function_assigned(SRV_Channel::k_rudderon_above) || SRV_Channels::function_assigned(SRV_Channel::k_rudderon_below);;
 
     // set defaults for dual/single motor tailsitter
     if (quadplane.frame_class == AP_Motors::MOTOR_FRAME_TAILSITTER) {
@@ -472,6 +473,10 @@ void Tailsitter::output(void)
     float aileron_mix = SRV_Channels::get_output_scaled(SRV_Channel::k_aileron) * (100.0 + plane.g.mixing_offset) * 0.01 * plane.g.mixing_gain;
     float rudder_mix = SRV_Channels::get_output_scaled(SRV_Channel::k_rudder) * (100.0 + plane.g.mixing_offset) * 0.01 * plane.g.mixing_gain;
 
+    // These do not affect pitch, so don't conflict and headroom rule may be omitted
+    SRV_Channels::set_output_scaled(SRV_Channel::k_rudderon_above, rudder_mix - aileron_mix);
+    SRV_Channels::set_output_scaled(SRV_Channel::k_rudderon_below, rudder_mix + aileron_mix);
+
     const float headroom = SERVO_MAX - fabsf(elevator_mix);
     if (is_positive(headroom)) {
         if (fabsf(aileron_mix) > headroom) {
@@ -485,10 +490,11 @@ void Tailsitter::output(void)
     } else {
         aileron_mix = 0.0;
         rudder_mix = 0.0;
-        yaw_lim |= _have_elevon;
+        yaw_lim |= _have_elevon || _have_rudderon;
         pitch_lim |= _have_elevon || _have_v_tail;
-        roll_lim |= _have_v_tail;
+        roll_lim |= _have_v_tail || _have_rudderon;
     }
+
     SRV_Channels::set_output_scaled(SRV_Channel::k_elevon_left, elevator_mix - aileron_mix);
     SRV_Channels::set_output_scaled(SRV_Channel::k_elevon_right, elevator_mix + aileron_mix);
     SRV_Channels::set_output_scaled(SRV_Channel::k_vtail_right, elevator_mix - rudder_mix);
