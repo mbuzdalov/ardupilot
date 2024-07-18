@@ -360,6 +360,8 @@ bool SRV_Channel::is_control_surface(SRV_Channel::Aux_servo_function_t function)
     case SRV_Channel::Aux_servo_function_t::k_elevon_right:
     case SRV_Channel::Aux_servo_function_t::k_vtail_left:
     case SRV_Channel::Aux_servo_function_t::k_vtail_right:
+    case SRV_Channel::Aux_servo_function_t::k_rudderon_above:
+    case SRV_Channel::Aux_servo_function_t::k_rudderon_below:
     case SRV_Channel::Aux_servo_function_t::k_airbrake:
         return true;
 
