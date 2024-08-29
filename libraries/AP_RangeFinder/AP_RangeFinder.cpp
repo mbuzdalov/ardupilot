@@ -65,6 +65,8 @@
 #include "AP_RangeFinder_Ainstein_LR_D1.h"
 #include "AP_RangeFinder_RDS02UF.h"
 
+#include "AP_RangeFinder_SU04_TCA9548A.h"
+
 #include <AP_BoardConfig/AP_BoardConfig.h>
 #include <AP_Logger/AP_Logger.h>
 #include <AP_SerialManager/AP_SerialManager.h>
@@ -599,6 +601,27 @@ void RangeFinder::detect_instance(uint8_t instance, uint8_t& serial_instance)
         serial_create_fn = AP_RangeFinder_RDS02UF::create;
         break;
 #endif
+    case Type::SU04_MUX: {
+        uint8_t addr = params[instance].address;
+        int8_t mux_bus = params[instance].pin;
+        if (mux_bus < 0 || mux_bus >= 8) {
+            break;
+        }
+        int8_t mux_addr = params[instance].stop_pin;
+        if (mux_addr < 0x70 || mux_addr > 0x77) {
+            break;
+        }
+        FOREACH_I2C(i) {
+            if (_add_backend(AP_RangeFinder_SU04_TCA9548A::detect(state[instance], params[instance],
+                                                                  hal.i2c_mgr->get_device(i, addr),
+                                                                  hal.i2c_mgr->get_device(i, mux_addr),
+                                                                  uint8_t(mux_bus)),
+                             instance)) {
+                break;
+            }
+        }
+        break;
+    }
     case Type::NONE:
         break;
     }
