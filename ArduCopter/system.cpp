@@ -400,6 +400,10 @@ void Copter::allocate_motors(void)
             motors = NEW_NOTHROW AP_MotorsTailsitter(copter.scheduler.get_loop_rate_hz());
             motors_var_info = AP_MotorsTailsitter::var_info;
             break;
+        case AP_Motors::MOTOR_FRAME_CHINOOK:
+            motors = NEW_NOTHROW AP_MotorsChinook(copter.scheduler.get_loop_rate_hz());
+            motors_var_info = AP_MotorsChinook::var_info;
+            break;
         case AP_Motors::MOTOR_FRAME_6DOF_SCRIPTING:
 #if AP_SCRIPTING_ENABLED
             motors = NEW_NOTHROW AP_MotorsMatrix_6DoF_Scripting(copter.scheduler.get_loop_rate_hz());
@@ -424,7 +428,6 @@ void Copter::allocate_motors(void)
             motors_var_info = AP_MotorsHeli_Quad::var_info;
             AP_Param::set_frame_type_flags(AP_PARAM_FRAME_HELI);
             break;
-            
         case AP_Motors::MOTOR_FRAME_HELI:
         default:
             motors = NEW_NOTHROW AP_MotorsHeli_Single(copter.scheduler.get_loop_rate_hz());
