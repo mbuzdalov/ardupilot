@@ -31,6 +31,9 @@ public:
     //  this can be used to ensure other pwm outputs (i.e. for servos) do not conflict
     uint32_t get_motor_mask() override;
 
+    // var_info for holding Parameter information
+    static const struct AP_Param::GroupInfo        var_info[];
+
 protected:
     // calculate motor outputs
     void output_armed_stabilizing() override;
@@ -47,4 +50,7 @@ protected:
     float _thrust_rear; // 0..1
     float _tilt_front;  // -1..1
     float _tilt_rear;  // -1..1
+
+    AP_Float _servo_slew; // "degrees" per second, assuming servo's [-1;1] maps to [-45;45] degrees.
+    void set_servo_with_slew(float &servo_output, float input);
 };

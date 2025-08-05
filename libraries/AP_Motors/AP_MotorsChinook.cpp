@@ -29,6 +29,21 @@ extern const AP_HAL::HAL& hal;
 
 #define SERVO_OUTPUT_RANGE  4500
 
+// parameters for the motor class
+const AP_Param::GroupInfo AP_MotorsChinook::var_info[] = {
+    AP_NESTEDGROUPINFO(AP_MotorsMulticopter, 0),
+
+    // @Param: SRV_SLEW
+    // @DisplayName: Slew servo limit, degrees/sec
+    // @Description: Controls how quickly a servo can move. Typical servos have around 600 degrees/sec. 0 to disable the limit. This assumes a servo goes +- 45 degrees, so if your limits are different, scale accordingly.
+    // @Range: 0.0 1500.0
+    // @Increment: 10.0
+    // @User: Standard
+    AP_GROUPINFO("SRV_SLEW", 1, AP_MotorsChinook, _servo_slew, 600.0),
+
+    AP_GROUPEND
+};
+
 // init
 void AP_MotorsChinook::init(motor_frame_class frame_class, motor_frame_type frame_type)
 {
@@ -71,6 +86,22 @@ void AP_MotorsChinook::set_update_rate(uint16_t speed_hz)
     SRV_Channels::set_rc_frequency(SRV_Channel::k_motor2, speed_hz);
 }
 
+// update the servo output taking slew limitation into account
+void AP_MotorsChinook::set_servo_with_slew(float &servo_output, float input)
+{
+    float slew_cdeg_s = _servo_slew * 100.0;
+    if (is_zero(slew_cdeg_s)) {
+        // slew limit is disabled
+        servo_output = input;
+    } else {
+        // enabled, compute bounds and crop to them
+        float lower_bound = MAX(-SERVO_OUTPUT_RANGE, servo_output - _dt_s * slew_cdeg_s);
+        float upper_bound = MIN(+SERVO_OUTPUT_RANGE, servo_output + _dt_s * slew_cdeg_s);
+        servo_output = constrain_float(input, lower_bound, upper_bound);
+    }
+}
+
+// convert the desired actuator outputs to the actual actuator outputs
 void AP_MotorsChinook::output_to_motors()
 {
     if (!initialised_ok()) {
@@ -79,29 +110,31 @@ void AP_MotorsChinook::output_to_motors()
 
     switch (_spool_state) {
         case SpoolState::SHUT_DOWN:
-            _actuator[0] = 0.0f;
-            _actuator[1] = 0.0f;
-            SRV_Channels::set_output_scaled(SRV_Channel::k_motor_tilt,    0.5 * (+_roll_radio_passthrough + _yaw_radio_passthrough) * SERVO_OUTPUT_RANGE);
-            SRV_Channels::set_output_scaled(SRV_Channel::k_tiltMotorRear, 0.5 * (-_roll_radio_passthrough + _yaw_radio_passthrough) * SERVO_OUTPUT_RANGE);
+            _actuator[0] = 0.0;
+            _actuator[1] = 0.0;
+            _actuator[2] = 0.5 * (+_roll_radio_passthrough + _yaw_radio_passthrough) * SERVO_OUTPUT_RANGE;
+            _actuator[3] = 0.5 * (-_roll_radio_passthrough + _yaw_radio_passthrough) * SERVO_OUTPUT_RANGE;
             break;
         case SpoolState::GROUND_IDLE:
             set_actuator_with_slew(_actuator[0], actuator_spin_up_to_ground_idle());
             set_actuator_with_slew(_actuator[1], actuator_spin_up_to_ground_idle());
-            SRV_Channels::set_output_scaled(SRV_Channel::k_motor_tilt,    _tilt_front * _spin_up_ratio * SERVO_OUTPUT_RANGE);
-            SRV_Channels::set_output_scaled(SRV_Channel::k_tiltMotorRear, _tilt_rear * _spin_up_ratio * SERVO_OUTPUT_RANGE);
+            set_servo_with_slew(_actuator[2], _tilt_front * _spin_up_ratio * SERVO_OUTPUT_RANGE);
+            set_servo_with_slew(_actuator[3], _tilt_rear  * _spin_up_ratio * SERVO_OUTPUT_RANGE);
             break;
         case SpoolState::SPOOLING_UP:
         case SpoolState::THROTTLE_UNLIMITED:
         case SpoolState::SPOOLING_DOWN:
             set_actuator_with_slew(_actuator[0], thr_lin.thrust_to_actuator(_thrust_front));
             set_actuator_with_slew(_actuator[1], thr_lin.thrust_to_actuator(_thrust_rear));
-            SRV_Channels::set_output_scaled(SRV_Channel::k_motor_tilt,    _tilt_front * SERVO_OUTPUT_RANGE);
-            SRV_Channels::set_output_scaled(SRV_Channel::k_tiltMotorRear, _tilt_rear * SERVO_OUTPUT_RANGE);
+            set_servo_with_slew(_actuator[2], _tilt_front * SERVO_OUTPUT_RANGE);
+            set_servo_with_slew(_actuator[3], _tilt_rear  * SERVO_OUTPUT_RANGE);
             break;
     }
 
     SRV_Channels::set_output_pwm(SRV_Channel::k_motor1, output_to_pwm(_actuator[0]));
     SRV_Channels::set_output_pwm(SRV_Channel::k_motor2, output_to_pwm(_actuator[1]));
+    SRV_Channels::set_output_scaled(SRV_Channel::k_motor_tilt,    _actuator[2]);
+    SRV_Channels::set_output_scaled(SRV_Channel::k_tiltMotorRear, _actuator[3]);
 }
 
 // get_motor_mask - returns a bitmask of which outputs are being used for motors (1 means being used)
@@ -123,6 +156,7 @@ uint32_t AP_MotorsChinook::get_motor_mask()
     return motor_mask;
 }
 
+// scales and writes front and rear tilts
 void AP_MotorsChinook::assign_tilts(float unscaled_front, float unscaled_rear)
 {
     _tilt_front = is_zero(_thrust_front) ? 0.0
