@@ -40,6 +40,8 @@ protected:
     // spin a motor at the pwm value specified
     void _output_test_seq(uint8_t motor_seq, int16_t pwm) override;
 
+    void assign_tilts(float unscaled_front, float unscaled_rear);
+
     // calculated outputs
     float _thrust_front; // 0..1
     float _thrust_rear; // 0..1

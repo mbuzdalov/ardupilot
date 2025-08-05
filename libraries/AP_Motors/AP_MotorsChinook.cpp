@@ -123,6 +123,14 @@ uint32_t AP_MotorsChinook::get_motor_mask()
     return motor_mask;
 }
 
+void AP_MotorsChinook::assign_tilts(float unscaled_front, float unscaled_rear)
+{
+    _tilt_front = is_zero(_thrust_front) ? 0.0
+            : constrain_float(unscaled_front / _thrust_front, -1.0, +1.0);
+    _tilt_rear = is_zero(_thrust_rear) ? 0.0
+            : constrain_float(unscaled_rear / _thrust_rear, -1.0, +1.0);
+}
+
 // calculate outputs to the motors
 void AP_MotorsChinook::output_armed_stabilizing()
 {
@@ -268,8 +276,7 @@ void AP_MotorsChinook::output_armed_stabilizing()
         // mathematically, they are not needed.
         _thrust_front = constrain_float(throttle_thrust + pitch_thrust, 0.0, 1.0);
         _thrust_rear = constrain_float(throttle_thrust - pitch_thrust, 0.0, 1.0);
-        _tilt_front = is_zero(_thrust_front) ? 0.0 : constrain_float(ypr / _thrust_front, -1.0, +1.0);
-        _tilt_rear = is_zero(_thrust_rear) ? 0.0 : constrain_float(ymr / _thrust_rear, -1.0, +1.0);
+        assign_tilts(ypr, ymr);
 
         // 3.3: This needs to be set so that filters work.
         //      This should be throttle_thrust / compensation_gain,
@@ -336,10 +343,7 @@ void AP_MotorsChinook::output_armed_stabilizing()
         // 4.5: If a reduced yaw can be set, do it.
         //      We have already set the motors, just have to set servos and the total throttle.
         if (!is_zero(new_yaw)) {
-            _tilt_front = is_zero(_thrust_front) ? 0.0
-                        : constrain_float((new_yaw + roll_thrust) / _thrust_front, -1.0, +1.0);
-            _tilt_rear = is_zero(_thrust_rear) ? 0.0
-                       : constrain_float((new_yaw - roll_thrust) / _thrust_rear, -1.0, +1.0);
+            assign_tilts(new_yaw + roll_thrust, new_yaw - roll_thrust);
             _throttle_out = (_thrust_front + _thrust_rear) / compensation_gain;
             return;
         }
@@ -405,10 +409,7 @@ void AP_MotorsChinook::output_armed_stabilizing()
     // 5.5: Produce the outputs.
     _thrust_front = constrain_float(throttle_thrust + pitch_thrust, 0.0, 1.0);
     _thrust_rear = constrain_float(throttle_thrust - pitch_thrust, 0.0, 1.0);
-    _tilt_front = is_zero(_thrust_front) ? 0.0
-                : constrain_float((yaw_thrust + roll_thrust) / _thrust_front, -1.0, +1.0);
-    _tilt_rear = is_zero(_thrust_rear) ? 0.0
-               : constrain_float((yaw_thrust - roll_thrust) / _thrust_rear, -1.0, +1.0);
+    assign_tilts(yaw_thrust + roll_thrust, yaw_thrust - roll_thrust);
     _throttle_out = (_thrust_front + _thrust_rear) / compensation_gain;
 }
 
