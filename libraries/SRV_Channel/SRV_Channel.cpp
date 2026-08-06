@@ -167,6 +167,7 @@ const AP_Param::GroupInfo SRV_Channel::var_info[] = {
     // @Values{Sub}: 181:Lights1,182:Lights2
     // @Values{Sub}: 183:VideoSwitch
     // @Values{Sub}: 184:Actuator1,185:Actuator2,186:Actuator3,187:Actuator4,188:Actuator5,189:Actuator6
+    // @Values{Plane, Copter}: 190:ThrottleCW,191:ThrottleCCW
     // @User: Standard
     // @RebootRequired: True
     AP_GROUPINFO("FUNCTION",  5, SRV_Channel, function, 0),
@@ -346,6 +347,8 @@ bool SRV_Channel::should_e_stop(SRV_Channel::Function function)
     case Function::k_motor12:
     case Function::k_motor13 ... Function::k_motor32:
     case Function::k_engine_run_enable:
+    case Function::k_throttleCW:
+    case Function::k_throttleCCW:
         return true;
     default:
         return false;

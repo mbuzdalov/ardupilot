@@ -219,6 +219,8 @@ public:
         k_actuator4             = 187,
         k_actuator5             = 188,
         k_actuator6             = 189,
+        k_throttleCW            = 190,   ///< A clockwise-rotating motor that receives a mix of throttle and copter yaw / plane roll, used in coax copters and similar tailsitters
+        k_throttleCCW           = 191,   ///< A counter-clockwise-rotating motor that receives a mix of throttle and copter yaw / plane roll, used in coax copters and similar tailsitters
         k_nr_aux_servo_functions         ///< This must be the last enum value (only add new values _before_ this one)
     } Function;
 
