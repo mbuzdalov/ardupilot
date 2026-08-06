@@ -1006,8 +1006,7 @@ bool AP_MotorsMulticopter::get_raw_motor_throttle(uint8_t motor_num, float& thr_
     return true;
 }
 
-#if APM_BUILD_TYPE(APM_BUILD_UNKNOWN)
-// Getters for AP_Motors example, not used by vehicles
+// Getters that are used in AP_Motors example and in tailsitter's coax motor management
 float AP_MotorsMulticopter::get_throttle_avg_max() const
 {
     return _throttle_avg_max;
@@ -1017,4 +1016,3 @@ int16_t AP_MotorsMulticopter::get_yaw_headroom() const
 {
     return _yaw_headroom;
 }
-#endif

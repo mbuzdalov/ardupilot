@@ -105,7 +105,7 @@ public:
     // Run arming checks
     bool arming_checks(size_t buflen, char *buffer) const override;
 
-    // Getters for AP_Motors example, not used by vehicles
+    // Getters for AP_Motors example and for tailsitter control of coax motors
     float get_throttle_avg_max() const;
     int16_t get_yaw_headroom() const;
 
