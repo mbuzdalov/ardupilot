@@ -227,6 +227,7 @@ void Tailsitter::setup()
     _have_rudder = SRV_Channels::function_assigned(SRV_Channel::k_rudder);
     _have_elevon = SRV_Channels::function_assigned(SRV_Channel::k_elevon_left) || SRV_Channels::function_assigned(SRV_Channel::k_elevon_right);
     _have_v_tail = SRV_Channels::function_assigned(SRV_Channel::k_vtail_left) || SRV_Channels::function_assigned(SRV_Channel::k_vtail_right);
+    _have_coax_motors = SRV_Channels::function_assigned(SRV_Channel::k_throttleCW) && SRV_Channels::function_assigned(SRV_Channel::k_throttleCCW);
 
     // set defaults for dual/single motor tailsitter
     if (quadplane.frame_class == AP_Motors::MOTOR_FRAME_TAILSITTER) {
@@ -289,14 +290,68 @@ void Tailsitter::output(void)
         return;
     }
 
+    // throttle 0 to 1
+    float throttle = SRV_Channels::get_output_scaled(SRV_Channel::k_throttle) * 0.01;
+
     if (!hal.util->get_soft_armed() ||
         SRV_Channels::get_emergency_stop()) {
         // Ensure motors stop on disarm
         motors->output_min();
-    }
+    } else if (_have_coax_motors) {
+        // This is the only place we are managing coax motors in this version of the firmware.
+        // Normally, it's already done in the active AP_Motors backend,
+        // but the backend selected here is Bicopter, and it has no idea about coax motors.
+        float roll = constrain_float(SRV_Channels::get_output_scaled(SRV_Channel::k_aileron) / SERVO_MAX, -1.0, +1.0) / 2;
 
-    // throttle 0 to 1
-    float throttle = SRV_Channels::get_output_scaled(SRV_Channel::k_throttle) * 0.01;
+        // CW is throttle - roll, CCW is throttle + roll.
+
+        // We have different priorities in the VTOL mode and in forward flight:
+        // - In forward flight, we assume that deviations in throttle can be managed by appropriate elevator settings,
+        //   but nothing can replace roll control, and no roll control can be fatal because of quick lift loss.
+        // - In the VTOL mode, throttle is mostly non-negotiable because of possible flyaways,
+        //   and faulty VTOL yaw can be dealt with relatively easily (by landing).
+        if (active()) {
+            // This is a simplified version of the proper Coax control.
+            //   throttle <= throttle_avg_max
+            //   throttle - min(|roll|, roll_headroom) >= 0
+            //   throttle + min(|roll|, roll_headroom) <= 1
+            // this means min(|roll|, roll_headroom) <= min(throttle, 1 - throttle) = min(throttle_avg_max, 0.5)
+
+            float throttle_avg_max = motors->get_throttle_avg_max(); // this is something we can never exceed
+            float roll_hard_limit = MIN(throttle_avg_max, 0.5);
+            float roll_headroom = MIN(motors->get_yaw_headroom() * 1e-3, roll_hard_limit); // yaw_headroom is specified in PWM units
+            roll = constrain_float(roll, -roll_hard_limit, +roll_hard_limit);
+
+            // Then, throttle cannot be smaller than roll capped by headroom...
+            float throttle_min = MIN(fabsf(roll), roll_headroom);
+            // ...and larger than the opposite or the average maximum...
+            float throttle_max = MIN(throttle_avg_max, 1.0 - throttle_min);
+            // ... which we apply immediately here because surfaces will be managed downstream,
+            // and we cannot make throttle depend on them like in the proper coax.
+            throttle = MAX(throttle, throttle_min);
+            throttle = MIN(throttle, throttle_max);
+
+            // Cap roll at the very end, so that the average throttle is as declared
+            float actual_roll_cap = MIN(throttle, 1.0 - throttle);
+            roll = constrain_float(roll, -actual_roll_cap, +actual_roll_cap);
+        } else {
+            // Here, we give roll the full priority by capping throttle towards the center.
+            // We do change the function-global throttle variable, because it is then used to scale the surfaces,
+            // which is crucial for proper control.
+            float coax_throttle_min = fabsf(roll); // this is within [0.0, 0.5], so the range below is non-empty under IEEE 754.
+            throttle = constrain_float(throttle, coax_throttle_min, 1.0 - coax_throttle_min);
+        }
+
+        // This sets outputs for both paths.
+        float throttle_cw  = constrain_float(throttle - roll, 0.0, 1.0);
+        float throttle_ccw = constrain_float(throttle + roll, 0.0, 1.0);
+
+        // Finally, writing the values.
+        uint16_t pwm_min = motors->get_pwm_output_min();
+        uint16_t pwm_range = motors->get_pwm_output_max() - pwm_min;
+        SRV_Channels::set_output_pwm(SRV_Channel::k_throttleCW,  pwm_min + pwm_range * throttle_cw);
+        SRV_Channels::set_output_pwm(SRV_Channel::k_throttleCCW, pwm_min + pwm_range * throttle_ccw);
+    }
 
     // handle forward flight modes and transition to VTOL modes
     if (!active() || in_vtol_transition()) {
@@ -334,6 +389,10 @@ void Tailsitter::output(void)
                 uint16_t throttle_pwm = motors->get_pwm_output_min() + (motors->get_pwm_output_max() - motors->get_pwm_output_min()) * throttle;
                 SRV_Channels::set_output_pwm(SRV_Channel::k_throttleLeft, throttle_pwm);
                 SRV_Channels::set_output_pwm(SRV_Channel::k_throttleRight, throttle_pwm);
+
+                // as we transition from forward to VTOL, so can ignore roll and send the same throttle to CW and CCW motors
+                SRV_Channels::set_output_pwm(SRV_Channel::k_throttleCW, throttle_pwm);
+                SRV_Channels::set_output_pwm(SRV_Channel::k_throttleCCW, throttle_pwm);
 
                 // throttle output is not used by AP_Motors so might have different PWM range, set scaled
                 SRV_Channels::set_output_scaled(SRV_Channel::k_throttle, throttle * 100.0);

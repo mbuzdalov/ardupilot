@@ -143,6 +143,7 @@ private:
     bool _have_rudder;
     bool _have_elevon;
     bool _have_v_tail;
+    bool _have_coax_motors;
 
     // references for convenience
     QuadPlane& quadplane;
